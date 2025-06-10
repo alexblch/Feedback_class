@@ -4,7 +4,11 @@ import torch.nn.functional as F
 import torch.optim as optim
 import csv
 import random
+import numpy as np
+import matplotlib.pyplot as plt
+import re
 
+# Neural Network for Reward Model
 class RewardModel(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(RewardModel, self).__init__()
@@ -15,7 +19,8 @@ class RewardModel(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.sigmoid(self.fc2(x))
         return x
-    
+
+# Training and evaluation functions for the Reward Model
 def train_reward_model(model, data_loader, num_epochs=10, learning_rate=0.001):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
@@ -28,9 +33,7 @@ def train_reward_model(model, data_loader, num_epochs=10, learning_rate=0.001):
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-        
         print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
-    
     return model
 
 def evaluate_reward_model(model, data_loader):
@@ -45,43 +48,30 @@ def evaluate_reward_model(model, data_loader):
     print(f'Validation Loss: {avg_loss:.4f}')
     return avg_loss
 
-
+# CSV Handling Functions
 def create_csv(file_path, n=20):
-    prompt = ["good", "bad", "average", "more technical"]
-    csv_dict = {
-        'User': [],
-        'Prompt': [],
-        'Mark': [],
-        'Reward': []  # New column for rewards
-    }
+    prompts = ["good", "bad", "average", "more technical"]
+    csv_dict = {'User': [], 'Prompt': [], 'Mark': [], 'Reward': []}
 
-    # Define a reward logic based on prompt and mark
     def assign_reward(prompt, mark):
-        if prompt == "good":
-            reward = min(5, mark * 2)
-        elif prompt == "bad":
-            reward = max(1, mark - 1)
-        elif prompt == "average":
-            reward = mark
-        elif prompt == "more technical":
-            reward = min(5, mark + 1)
-        else:
-            reward = mark
-
-        # Ensure the reward is an integer between 1 and 5
-        reward = int(max(1, min(5, reward)))
-        return reward
+        reward_mapping = {
+            "good": min(5, mark * 2),
+            "bad": max(1, mark - 1),
+            "average": mark,
+            "more technical": min(5, mark + 1)
+        }
+        return int(max(1, min(5, reward_mapping.get(prompt, mark))))
 
     for i in range(n):
         user = f'User {i}'
-        current_prompt = random.choice(prompt)
+        current_prompt = random.choice(prompts)
         mark = random.randint(1, 5)
         reward = assign_reward(current_prompt, mark)
 
         csv_dict['User'].append(user)
         csv_dict['Prompt'].append(current_prompt)
         csv_dict['Mark'].append(mark)
-        csv_dict['Reward'].append(reward / 5)  # Normalize by dividing by 5
+        csv_dict['Reward'].append(reward / 5)
 
     with open(file_path, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -94,17 +84,12 @@ def add_line_in_csv(file_path, line_data):
         writer = csv.writer(file)
         writer.writerow(line_data)
 
-
 def read_csv(file_path):
-    data = []
     with open(file_path, mode='r', newline='') as file:
         reader = csv.reader(file)
-        headers = next(reader)  # Read header row
-        for row in reader:
-            data.append(row)
+        headers = next(reader)
+        data = [row for row in reader]
     return headers, data
-
-
 
 def take_columns(file_path, columns):
     headers, data = read_csv(file_path)
@@ -116,10 +101,113 @@ def take_columns(file_path, columns):
                 column_data[col].append(row[index])
     return column_data
 
-# Example usage
+# Tokenization and Embedding Functions
+def tokenize(text):
+    pattern = re.compile(r'[A-Za-z]+[\w^\']*|[\w^\']*[A-Za-z]+[\w^\']*')
+    return pattern.findall(text.lower())
+
+def mapping(tokens):
+    unique_tokens = sorted(set(tokens))
+    word_to_id = {token: i for i, token in enumerate(unique_tokens)}
+    id_to_word = {i: token for token, i in word_to_id.items()}
+    return word_to_id, id_to_word
+
+def one_hot_encode(index, vocab_size):
+    vec = np.zeros(vocab_size)
+    vec[index] = 1
+    return vec
+
+def generate_training_data(tokens, word_to_id, window=2):
+    X, y = [], []
+    vocab_size = len(word_to_id)
+    for i, center_word in enumerate(tokens):
+        center_index = word_to_id[center_word]
+        for j in range(max(0, i - window), min(len(tokens), i + window + 1)):
+            if i != j:
+                context_word = tokens[j]
+                context_index = word_to_id[context_word]
+                X.append(one_hot_encode(center_index, vocab_size))
+                y.append(one_hot_encode(context_index, vocab_size))
+    return np.array(X), np.array(y)
+
+# Skip-gram Model Functions
+def init_network(vocab_size, embedding_dim):
+    return {
+        "w1": np.random.randn(vocab_size, embedding_dim),
+        "w2": np.random.randn(embedding_dim, vocab_size)
+    }
+
+def softmax(X):
+    exp = np.exp(X - np.max(X, axis=1, keepdims=True))
+    return exp / np.sum(exp, axis=1, keepdims=True)
+
+def forward(model, X, return_cache=True):
+    a1 = X @ model["w1"]
+    a2 = a1 @ model["w2"]
+    z = softmax(a2)
+    if return_cache:
+        return {"a1": a1, "a2": a2, "z": z}
+    return z
+
+def cross_entropy(z, y):
+    return -np.sum(np.log(z + 1e-9) * y)
+
+def backward(model, X, y, alpha):
+    cache = forward(model, X)
+    dz = cache["z"] - y
+    dw2 = cache["a1"].T @ dz
+    da1 = dz @ model["w2"].T
+    dw1 = X.T @ da1
+    model["w1"] -= alpha * dw1
+    model["w2"] -= alpha * dw2
+    return cross_entropy(cache["z"], y)
+
+def get_prompt_embedding(prompt, word_to_id, embeddings):
+    prompt_embedding = []
+    for word in prompt:
+        if word in word_to_id:
+            embedding = embeddings[word_to_id[word]]
+            prompt_embedding.append(embedding)
+    return np.mean(prompt_embedding, axis=0) if prompt_embedding else np.zeros(embeddings.shape[1])
+
+# Example Usage
 create_csv('data/reward_data.csv', n=20)
 add_line_in_csv('data/reward_data.csv', ['User 21', 'good', 5, 1.0])
-print()
-print(read_csv('data/reward_data.csv'))
-print()
-print("\n".join("{}\t{}".format(k, v) for k, v in take_columns('data/reward_data.csv', ['User', 'Mark', 'Reward']).items()))
+
+headers, data = read_csv('data/reward_data.csv')
+print("CSV Headers and Data:")
+print(headers)
+print(data)
+
+datas = take_columns('data/reward_data.csv', ['User', 'Prompt', 'Mark', 'Reward'])
+print("\nSelected Columns:")
+print(datas)
+
+# Tokenization and Embedding
+tokens_nested = [tokenize(prompt) for prompt in datas['Prompt']]
+tokens = [word for sublist in tokens_nested for word in sublist]
+word_to_id, id_to_word = mapping(tokens)
+
+X, y = generate_training_data(tokens, word_to_id, window=2)
+
+# Training the Skip-gram Model
+np.random.seed(42)
+vocab_size = len(word_to_id)
+embedding_dim = 10
+model = init_network(vocab_size, embedding_dim)
+
+history = [backward(model, X, y, alpha=0.05) for _ in range(50)]
+
+plt.plot(range(len(history)), history)
+plt.title("Loss over time")
+plt.xlabel("Iteration")
+plt.ylabel("Cross-Entropy Loss")
+plt.show()
+
+# Extracting and Printing Embeddings
+embeddings = model["w1"]
+prompt_embeddings = [get_prompt_embedding(prompt, word_to_id, embeddings) for prompt in tokens_nested]
+
+print("\nPrompt Embeddings:")
+for i, embedding in enumerate(prompt_embeddings):
+    print(f"Prompt {i + 1} Embedding: {embedding}")
