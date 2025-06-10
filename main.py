@@ -46,6 +46,7 @@ def evaluate_reward_model(model, data_loader):
             total_loss += loss.item()
     avg_loss = total_loss / len(data_loader)
     print(f'Validation Loss: {avg_loss:.4f}')
+    print("Accuracy: {:.2f}%".format((1 - avg_loss) * 100))
     return avg_loss
 
 # CSV Handling Functions
@@ -211,3 +212,27 @@ prompt_embeddings = [get_prompt_embedding(prompt, word_to_id, embeddings) for pr
 print("\nPrompt Embeddings:")
 for i, embedding in enumerate(prompt_embeddings):
     print(f"Prompt {i + 1} Embedding: {embedding}")
+
+
+datas['Prompt Embeddings'] = prompt_embeddings
+X_embedding = torch.tensor([l for l in datas['Prompt Embeddings']], dtype=torch.float32)
+X_mark = torch.tensor([(int(m) - 1) / 4 for m in datas['Mark']], dtype=torch.float32)
+X_reward = torch.tensor(np.array([float(r) for r in datas['Reward']]), dtype=torch.float32)
+
+
+X = torch.cat((X_embedding, X_mark.unsqueeze(1)), dim=1)
+y = X_reward.unsqueeze(1)
+
+from sklearn.model_selection import train_test_split
+
+X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Initialize and train the Reward Model
+input_dim = X_train.shape[1]
+hidden_dim = 64
+output_dim = 1
+reward_model = RewardModel(input_dim, hidden_dim, output_dim)
+# Train the reward model
+reward_model = train_reward_model(reward_model, [(X_train[i], y_train[i]) for i in range(len(X_train))], num_epochs=10, learning_rate=0.001)
+# Evaluate the reward model
+evaluate_reward_model(reward_model, [(X_val[i], y_val[i]) for i in range(len(X_val))])

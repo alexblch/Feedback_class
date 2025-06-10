@@ -1,22 +1,22 @@
 User,Prompt,Mark,Reward
-User 0,good,1,0.4
-User 1,average,3,0.6
-User 2,bad,5,0.8
-User 3,bad,4,0.6
-User 4,good,5,1.0
-User 5,bad,2,0.2
-User 6,good,3,1.0
-User 7,good,3,1.0
-User 8,good,1,0.4
-User 9,more technical,1,0.4
-User 10,good,4,1.0
-User 11,bad,1,0.2
-User 12,average,3,0.6
-User 13,good,2,0.8
-User 14,average,3,0.6
-User 15,average,2,0.4
-User 16,average,3,0.6
-User 17,good,4,1.0
-User 18,more technical,3,0.8
-User 19,bad,3,0.4
+User 0,more technical,5,1.0
+User 1,more technical,3,0.8
+User 2,average,1,0.2
+User 3,bad,3,0.4
+User 4,good,3,1.0
+User 5,good,5,1.0
+User 6,average,2,0.4
+User 7,more technical,2,0.6
+User 8,good,2,0.8
+User 9,bad,1,0.2
+User 10,more technical,1,0.4
+User 11,good,3,1.0
+User 12,more technical,3,0.8
+User 13,more technical,3,0.8
+User 14,bad,3,0.4
+User 15,average,4,0.8
+User 16,good,2,0.8
+User 17,average,5,1.0
+User 18,bad,4,0.6
+User 19,average,4,0.8
 User 21,good,5,1.0
