@@ -8,33 +8,104 @@ import numpy as np
 import matplotlib.pyplot as plt
 import re
 
+from torch.utils.data import TensorDataset, DataLoader
+
+
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+
+prompts_test = [
+    "great melody and rhythm",
+    "vocals are outstanding",
+    "could use more variety in instruments",
+    "too repetitive",
+    "lyrics are powerful",
+    "catchy chorus",
+    "the beat is too slow",
+    "amazing production quality",
+    "needs better mixing",
+    "very original sound",
+    "not catchy enough",
+    "excellent harmonies",
+    "the intro is too long",
+    "impressive guitar solo",
+    "bass line is too weak",
+    "unique vocal style",
+    "song feels unfinished",
+    "outstanding arrangement",
+    "sounds overproduced",
+    "beautiful piano section",
+    "lacks emotional depth",
+    "energy drops in the middle",
+    "memorable hook",
+    "melody is forgettable",
+    "chorus stands out",
+    "bridge is unnecessary",
+    "great dynamics",
+    "the song is too short",
+    "loved the drum patterns",
+    "missing instrumental break",
+    "great use of effects",
+    "not enough vocal clarity",
+    "lyrics are cliché",
+    "track feels too long",
+    "catchy and upbeat",
+    "melancholic atmosphere",
+    "the drop is unexpected",
+    "great build-up",
+    "too much auto-tune",
+    "production is clean",
+    "needs more layers",
+    "vocals lack emotion",
+    "creative sound design",
+    "strong opening",
+    "the outro is abrupt",
+    "chorus is underwhelming",
+    "harmonies are weak",
+    "groove is infectious",
+    "arrangement feels crowded",
+    "unique genre fusion",
+    "needs a stronger climax"
+]
+
+
+def normalized_positivity(text):
+    analyzer = SentimentIntensityAnalyzer()
+    score = analyzer.polarity_scores(text)['compound']  # -1 (négatif) à 1 (positif)
+    normalized = (score + 1) / 2  # entre 0 et 1
+    return normalized
+
+
 # Neural Network for Reward Model
 class RewardModel(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim):
         super(RewardModel, self).__init__()
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, output_dim)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         x = F.relu(self.fc1(x))
-        x = F.sigmoid(self.fc2(x))
+        x = self.sigmoid(self.fc2(x))
         return x
 
-# Training and evaluation functions for the Reward Model
 def train_reward_model(model, data_loader, num_epochs=10, learning_rate=0.001):
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     criterion = nn.MSELoss()
-
     model.train()
     for epoch in range(num_epochs):
+        epoch_loss = 0
         for inputs, targets in data_loader:
             optimizer.zero_grad()
             outputs = model(inputs)
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
-        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+            epoch_loss += loss.item() * inputs.size(0)
+        avg_loss = epoch_loss / len(data_loader.dataset)
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}, Accuracy: {(1 - avg_loss) * 100:.2f}%')
     return model
+
 
 def evaluate_reward_model(model, data_loader):
     model.eval()
@@ -43,15 +114,15 @@ def evaluate_reward_model(model, data_loader):
         for inputs, targets in data_loader:
             outputs = model(inputs)
             loss = F.mse_loss(outputs, targets)
-            total_loss += loss.item()
-    avg_loss = total_loss / len(data_loader)
+            total_loss += loss.item() * inputs.size(0)
+    avg_loss = total_loss / len(data_loader.dataset)
     print(f'Validation Loss: {avg_loss:.4f}')
     print("Accuracy: {:.2f}%".format((1 - avg_loss) * 100))
     return avg_loss
 
+
 # CSV Handling Functions
 def create_csv(file_path, n=20):
-    prompts = ["good", "bad", "average", "more technical"]
     csv_dict = {'User': [], 'Prompt': [], 'Mark': [], 'Reward': []}
 
     def assign_reward(prompt, mark):
@@ -65,7 +136,7 @@ def create_csv(file_path, n=20):
 
     for i in range(n):
         user = f'User {i}'
-        current_prompt = random.choice(prompts)
+        current_prompt = random.choice(prompts_test)
         mark = random.randint(1, 5)
         reward = assign_reward(current_prompt, mark)
 
@@ -79,6 +150,13 @@ def create_csv(file_path, n=20):
         writer.writerow(['User', 'Prompt', 'Mark', 'Reward'])
         for i in range(n):
             writer.writerow([csv_dict['User'][i], csv_dict['Prompt'][i], csv_dict['Mark'][i], csv_dict['Reward'][i]])
+
+
+def create_csv_empty(file_path, col=["User", "Prompt", "Mark", "Reward"]):
+    with open(file_path, "w", newline='') as my_empty_csv:
+        writer = csv.writer(my_empty_csv)
+        writer.writerow(col)
+
 
 def add_line_in_csv(file_path, line_data):
     with open(file_path, mode='a', newline='') as file:
@@ -171,68 +249,86 @@ def get_prompt_embedding(prompt, word_to_id, embeddings):
             prompt_embedding.append(embedding)
     return np.mean(prompt_embedding, axis=0) if prompt_embedding else np.zeros(embeddings.shape[1])
 
-# Example Usage
-create_csv('data/reward_data.csv', n=20)
-add_line_in_csv('data/reward_data.csv', ['User 21', 'good', 5, 1.0])
 
-headers, data = read_csv('data/reward_data.csv')
-print("CSV Headers and Data:")
-print(headers)
-print(data)
-
-datas = take_columns('data/reward_data.csv', ['User', 'Prompt', 'Mark', 'Reward'])
-print("\nSelected Columns:")
-print(datas)
-
-# Tokenization and Embedding
-tokens_nested = [tokenize(prompt) for prompt in datas['Prompt']]
-tokens = [word for sublist in tokens_nested for word in sublist]
-word_to_id, id_to_word = mapping(tokens)
-
-X, y = generate_training_data(tokens, word_to_id, window=2)
-
-# Training the Skip-gram Model
-np.random.seed(42)
-vocab_size = len(word_to_id)
-embedding_dim = 10
-model = init_network(vocab_size, embedding_dim)
-
-history = [backward(model, X, y, alpha=0.05) for _ in range(50)]
-
-plt.plot(range(len(history)), history)
-plt.title("Loss over time")
-plt.xlabel("Iteration")
-plt.ylabel("Cross-Entropy Loss")
-plt.show()
-
-# Extracting and Printing Embeddings
-embeddings = model["w1"]
-prompt_embeddings = [get_prompt_embedding(prompt, word_to_id, embeddings) for prompt in tokens_nested]
-
-print("\nPrompt Embeddings:")
-for i, embedding in enumerate(prompt_embeddings):
-    print(f"Prompt {i + 1} Embedding: {embedding}")
+def create_random_dataset(n=20, prompts_test=prompts_test):
+    # Generate random data for n users
+    users = [f"User {i}" for i in range(1, n + 1)]
+    prompts = [random.choice(prompts_test) for _ in range(n)]
+    marks = [normalized_positivity(prompt) for prompt in prompts]
+    rewards = [random.uniform(0, 1) for _ in range(n)]
+    return list(zip(users, prompts, marks, rewards))
 
 
-datas['Prompt Embeddings'] = prompt_embeddings
-X_embedding = torch.tensor([l for l in datas['Prompt Embeddings']], dtype=torch.float32)
-X_mark = torch.tensor([(int(m) - 1) / 4 for m in datas['Mark']], dtype=torch.float32)
-X_reward = torch.tensor(np.array([float(r) for r in datas['Reward']]), dtype=torch.float32)
 
+if __name__ == "__main__":
+    # Example Usage
+    create_csv_empty("data/reward_data.csv")
+    for i in range(20):
+        add_line_in_csv("data/reward_data.csv", create_random_dataset(1, prompts_test)[0])
 
-X = torch.cat((X_embedding, X_mark.unsqueeze(1)), dim=1)
-y = X_reward.unsqueeze(1)
+    headers, data = read_csv('data/reward_data.csv')
+    print("CSV Headers and Data:")
+    print(headers)
+    print(data)
 
-from sklearn.model_selection import train_test_split
+    datas = take_columns('data/reward_data.csv', ['User', 'Prompt', 'Mark', 'Reward'])
+    print("\nSelected Columns:")
+    print(datas)
 
-X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Tokenization and Embedding
+    tokens_nested = [tokenize(prompt) for prompt in datas['Prompt']]
+    tokens = [word for sublist in tokens_nested for word in sublist]
+    word_to_id, id_to_word = mapping(tokens)
 
-# Initialize and train the Reward Model
-input_dim = X_train.shape[1]
-hidden_dim = 64
-output_dim = 1
-reward_model = RewardModel(input_dim, hidden_dim, output_dim)
-# Train the reward model
-reward_model = train_reward_model(reward_model, [(X_train[i], y_train[i]) for i in range(len(X_train))], num_epochs=10, learning_rate=0.001)
-# Evaluate the reward model
-evaluate_reward_model(reward_model, [(X_val[i], y_val[i]) for i in range(len(X_val))])
+    X, y = generate_training_data(tokens, word_to_id, window=2)
+
+    # Training the Skip-gram Model
+    np.random.seed(42)
+    vocab_size = len(word_to_id)
+    embedding_dim = 10
+    model = init_network(vocab_size, embedding_dim)
+
+    history = [backward(model, X, y, alpha=0.05) for _ in range(50)]
+
+    plt.plot(range(len(history)), history)
+    plt.title("Loss over time")
+    plt.xlabel("Iteration")
+    plt.ylabel("Cross-Entropy Loss")
+    plt.show()
+
+    # Extracting and Printing Embeddings
+    embeddings = model["w1"]
+    prompt_embeddings = [get_prompt_embedding(prompt, word_to_id, embeddings) for prompt in tokens_nested]
+
+    print("\nPrompt Embeddings:")
+    for i, embedding in enumerate(prompt_embeddings):
+        print(f"Prompt {i + 1} Embedding: {embedding}")
+
+    datas['Prompt Embeddings'] = prompt_embeddings
+    X_embedding = torch.tensor([l for l in datas['Prompt Embeddings']], dtype=torch.float32)
+    X_mark = torch.tensor([float(m) for m in datas['Mark']], dtype=torch.float32)
+    X_reward = torch.tensor(np.array([float(r) for r in datas['Reward']]), dtype=torch.float32)
+
+    # data for reward model
+    X = torch.cat((X_embedding, X_mark.unsqueeze(1)), dim=1)
+    y = X_reward.unsqueeze(1)
+
+    from sklearn.model_selection import train_test_split
+
+    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
+
+    # Prépare les DataLoaders pour train et val
+    train_loader = DataLoader(TensorDataset(X_train, y_train), batch_size=4, shuffle=True)
+    val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=4)
+
+    # Modèle
+    input_dim = X_train.shape[1]
+    hidden_dim = 64
+    output_dim = 1
+    reward_model = RewardModel(input_dim, hidden_dim, output_dim)
+
+    # Train
+    reward_model = train_reward_model(reward_model, train_loader, num_epochs=10, learning_rate=0.001)
+
+    # Evaluation
+    evaluate_reward_model(reward_model, val_loader)

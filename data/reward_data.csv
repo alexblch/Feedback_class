@@ -1,22 +1,21 @@
 User,Prompt,Mark,Reward
-User 0,more technical,5,1.0
-User 1,more technical,3,0.8
-User 2,average,1,0.2
-User 3,bad,3,0.4
-User 4,good,3,1.0
-User 5,good,5,1.0
-User 6,average,2,0.4
-User 7,more technical,2,0.6
-User 8,good,2,0.8
-User 9,bad,1,0.2
-User 10,more technical,1,0.4
-User 11,good,3,1.0
-User 12,more technical,3,0.8
-User 13,more technical,3,0.8
-User 14,bad,3,0.4
-User 15,average,4,0.8
-User 16,good,2,0.8
-User 17,average,5,1.0
-User 18,bad,4,0.6
-User 19,average,4,0.8
-User 21,good,5,1.0
+User 1,great build-up,0.81245,0.13602208012006267
+User 1,not enough vocal clarity,0.34555,0.9510908415379276
+User 1,missing instrumental break,0.352,0.876562183757312
+User 1,melody is forgettable,0.5,0.8539169640723875
+User 1,harmonies are weak,0.42345,0.18887860631114328
+User 1,not enough vocal clarity,0.34555,0.04988464691399386
+User 1,great build-up,0.81245,0.9366187457045952
+User 1,lacks emotional depth,0.57655,0.29141965879191467
+User 1,the song is too short,0.5,0.9215242603328744
+User 1,lyrics are powerful,0.71075,0.405077859380676
+User 1,sounds overproduced,0.5,0.05648872223617074
+User 1,sounds overproduced,0.5,0.6294853186410683
+User 1,needs better mixing,0.7202,0.808179374115474
+User 1,track feels too long,0.5,0.004822207682506852
+User 1,groove is infectious,0.5,0.6991341277208605
+User 1,too much auto-tune,0.5,0.16088476851873312
+User 1,the intro is too long,0.5,0.5651769890720636
+User 1,great dynamics,0.86755,0.4214621419186759
+User 1,unique vocal style,0.5,0.39192194097544664
+User 1,excellent harmonies,0.8592,0.06438486534472321
